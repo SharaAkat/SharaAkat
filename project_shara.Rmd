@@ -1,0 +1,576 @@
+---
+title: 'What are the impacts of drought on beef herd production (county level analysis)?'
+author: "Shara Akat"
+output:
+  html_document:
+    number_sections: yes
+    theme: flatly
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    highlight: zenburn
+    number_sections: yes
+    toc: yes
+  word_document:
+    toc: yes
+geometry: margin=0.75in
+---
+
+```{r, echo=FALSE}
+library(knitr)
+
+# library download
+library(dplyr) 
+library(usdarnass)
+library(tidyverse)
+library(ggplot2)
+library(gganimate) 
+library(psych) 
+library("patchwork")
+library(fixest)
+library(modelsummary)
+library(data.table)
+library(car)
+
+opts_chunk$set(
+  echo= TRUE,
+  comment = NA,
+  message = FALSE,
+  warning = FALSE,
+  tidy=FALSE,
+  #--- figure related ---#
+  fig.align='center',
+  fig.width=5,
+  fig.height=4
+  # dev='pdf'
+  )
+```
+
+
+<!-- <span style="background:yellow">(you may remove this part when you submit your work)</span>  -->
+
+------
+
+# Introduction
+
+Main objective is to identify how drought affects the production of beef cattle industry. The cattle cycle is typically influenced by the combination of effects such as cattle prices, market conditions and climate changes. As for cow-calf herd, approximately two-third of the forage requirement should come from pasture grazing, drought can have direct impacts on animal growth. Drought in 2010s decreased pasture availability, increased feed costs, and led to the decrease in beef cow inventories. Furthermore, forage availability and prices can be one of the factors influencing cattle movement across geographic regions. Hence, understanding this impact can be crucial in analysis of overall beef herd industry and its distribution within the country.
+
+The results of this analysis can help in the development of sector-specific risk-mitigating measures by policy makers as in the result, one can see how counties respond to drought and how herd size alters. Also, it can help in the construction of production planning resistant to climate changes to improve operational profits. 
+
+# Data description and exploration
+
+For this analysis, annual county-level beef cattle inventory data from USDA NASS for 2005-2021 period will be used (the dependent variable). Key explanatory variables include county level drought intensity indicators from the US Drought Monitor. The indicators show the percent area for a particular county exposed to certain drought categories. There are five categories: abnormally dry (D0), showing areas that may be going into or are coming out of drought; and four levels of drought: moderate (D1), severe (D2), extreme (D3) and exceptional (D4). Annual county-level beef cattle inventory data is presented as of January 1st each year, while drought data is reported weekly. 
+
+
+## Drought data download and exploration
+
+```{r }
+
+# NASS key 
+usdarnass::nass_set_key(key = "79F68508-887F-3423-A3EE-F60AB7DFB3AE")
+
+# Pulling drought data
+data_1 <-readRDS('C:/Users/shara/Documentsdrought_weekly')
+data_1 %>% as_tibble() %>% head
+
+```
+
+```{r }
+
+#graphing mean intensities by year
+
+data_12 <- data_1 %>%  
+  dplyr::select(., year, None, D0, D1, D2, D3, D4) %>%  
+  aggregate(cbind(None, D0, D1, D2, D3, D4) ~ year, ., FUN = mean)
+
+plot(data_12$year, data_12$None, typ = "line", ylim=c(0, 100), xlab="Year", ylab="Intencity") 
+lines(data_12$year, data_12$D0, col = "red")
+lines(data_12$year, data_12$D1, col = "yellow")
+lines(data_12$year, data_12$D2, col = "blue")
+lines(data_12$year, data_12$D3, col = "pink")
+lines(data_12$year, data_12$D4, col = "purple")
+axis(side = 2, at=seq(0, 100, 10))
+grid()
+legend("topleft",  cex = 0.5,horiz = T, legend=c("None", "D0", "D1", "D2", "D3", "D4"),
+      col=c("black", "red", "yellow", "blue","pink", "purple"), bg="white",lwd=2)
+title(main="Mean drought intensities by year", col.main="Blue",
+  sub="US Drought Monitor")
+
+```
+
+Yearly mean densities might seem to be less meaningful in overall context. However, it was found to help visualize the overall patterns through years. What we can observe is that during the years of severe drought starting from 2010s, category None (no drought) was at its minimum indicating that drought (of any intensity) was observed in most of territories.
+
+## National cattle inventory data download and exploration 
+
+National cattle inventory data was pulled to see the overall inventory patters for the last 20 years. 
+
+```{r }
+
+#pulling national data from usda nass
+by_national <- usdarnass::nass_data(source_desc = "SURVEY", sector_desc = "ANIMALS & PRODUCTS", group_desc = "LIVESTOCK",
+                                  commodity_desc = "CATTLE", short_desc = "CATTLE, COWS, BEEF - INVENTORY",
+                                  agg_level_desc = "NATIONAL", state_name = NULL, county_name = NULL, region_desc = NULL, year = "2003=<", numeric_vals = FALSE)
+
+# selecting columns
+by_national_2 <-  by_national %>%
+  dplyr::select(., year = year, state_abbr = state_alpha, Inventory = Value, reference_period_desc) %>% 
+  filter(., reference_period_desc == "FIRST OF JAN") 
+
+
+# data modifications
+by_national_2$Inventory <- as.numeric(gsub(",", "", as.character(by_national_2$Inventory)))/1000000
+by_national_2$year <- as.numeric(format(by_national_2$year),  "%Y")
+
+
+# plotting it 
+ggplot(data = by_national_2) + 
+  geom_line(aes(x = year, y = Inventory), col = "darkblue") +
+  ggtitle("Cattle inventory in millions", subtitle =  "USDA NASS") +
+  theme_bw()
+
+#create summary table
+summary <- describe(by_national_2$Inventory) 
+summary  
+```
+
+From the graph above we can see that the overall cattle inventory fluctuates within last 20 years and reached its minimum around 2014. This might be related to many factors such as cattle prices, market conditions and climate changes. One of the hypothesis might be that during the years of severe drought, due to high feed stuff prices, farmers might choose to liquidate certain portion of herd. On the other hand, cattle distribution within the geographic territories might alter as well. 
+
+
+## State-level inventory data download and exploration 
+
+```{r }
+
+#pulling state data from usda nass
+by_state <- usdarnass::nass_data(source_desc = "SURVEY", sector_desc = "ANIMALS & PRODUCTS", group_desc = "LIVESTOCK",
+                                    commodity_desc = "CATTLE", short_desc = "CATTLE, COWS, BEEF - INVENTORY",
+                                    agg_level_desc = "STATE", state_name = NULL, county_name = NULL, region_desc = NULL, year = "2005=<", numeric_vals = FALSE)
+
+# selecting columns
+by_state_2 <-  by_state %>%
+  dplyr::select(., year = year, region = state_name, state_abbr = state_alpha, Inventory = Value) %>% 
+  filter(., year <= 2021)
+
+
+# data modifications
+by_state_2$Inventory <- as.numeric(gsub(",", "", as.character(by_state_2$Inventory)))/1000000
+by_state_2$region <- tolower(by_state_2$region)
+by_state_2$year <- as.numeric(format(by_state_2$year),  "%Y")
+
+# plotting state data 
+state.df_1 <- c("TX", "NE", "KS", "AL", "OK")    
+
+by_state_2_1 <- by_state_2 %>% 
+  filter(., state_abbr %in% state.df_1) %>% 
+  filter(., year <= 2020)
+
+ggplot(data = by_state_2_1) + 
+  geom_line(aes(x = year, y = Inventory, color = state_abbr)) +
+  facet_grid(state_abbr ~ ., scales = 'free') +
+    ggtitle("Cattle inventory in millions in states", subtitle =  "USDA NASS") +
+  labs(color = "States") +
+  theme_bw()
+
+
+```
+We can see that randomly chosen sates illustrate different inventory changes through time. 2010s droughts might lead to inventory decrease in these states however depending on the drought severity and geographical location inventory liquidation might have appeared in different years. On the other hand, drought might take insignificant role as well as in certain states we could observe the decreasing trend before the drought.
+
+Following animated map illustrated the state-level cattle inventory change through years. What we can see is overall certain states illustrate steady inventory size while others show fluctuations. 
+
+```{r }
+
+MainStates <- map_data ("state")
+c <- aggregate(cbind(long, lat, group) ~ region, data=MainStates, 
+               FUN=function(x)mean(range(x)))
+
+MergedStates_1 <- inner_join(MainStates, by_state_2, by = "region") 
+MergedStates_2 <- inner_join(c, by_state_2, by = "region") 
+
+p <- ggplot() +
+  geom_polygon( data=MergedStates_1,
+                aes(x=long, y=lat, group=group, fill = Inventory),
+                color="white", size = 0.2) +
+  scale_fill_distiller(palette = "Spectral") +
+  labs(title="", subtitle = "US Cattle Inventory by year in millions \n Source: USDA NASS") +
+  coord_map("albers", lat0 = 39, lat1 = 45)+
+  geom_text(data=MergedStates_2, aes(x = long, y = lat, label = Inventory)) +
+  theme(panel.border = element_blank()) +
+  theme(axis.ticks = element_blank()) +
+  theme(axis.text = element_blank())  +
+  theme(legend.position=c(.93,.5), legend.text.align=0)
+
+animatedMap <- p +
+  transition_time(year) + 
+  labs(title = "Year: {as.integer(frame_time)}") 
+
+num_years <- max(by_state_2$year) - min(by_state_2$year) + 1
+animate(animatedMap, nframes = num_years, fps = 1,  width = 750, height = 450) 
+
+
+
+```
+
+
+## County-level inventory data download and exploration 
+
+```{r }
+
+# pulling cattle inventory at county level from USDA NASS
+by_county <- usdarnass::nass_data(source_desc = "SURVEY", sector_desc = "ANIMALS & PRODUCTS",
+  group_desc = "LIVESTOCK", commodity_desc = "CATTLE", short_desc = "CATTLE, COWS, BEEF - INVENTORY",
+  agg_level_desc = "COUNTY", state_name = NULL, county_name = NULL, region_desc = NULL, year = "2003=<",
+  numeric_vals = FALSE)
+
+# selecting columns
+by_county_2 <-  by_county %>%
+  dplyr::select(., year = year, state_name = state_name, state_abbr = state_alpha, state_fips = state_fips_code, county_fips = county_code, county = county_name, Inventory = Value) %>%
+  mutate(., fips = as.numeric(str_c(state_fips, '', county_fips)))
+
+
+# data modifications
+
+## from character to numeric; get rid of comma
+by_county_2$Inventory <- as.numeric(gsub(",", "", as.character(by_county_2$Inventory)))
+
+## lead inventory values 1 year
+by_county_2$Inventory <- lead(by_county_2$Inventory, n = 1)
+
+## capital to lower letters for county names
+by_county_2$county <- tolower(by_county_2$county)
+by_county_2$state_name <- tolower(by_county_2$state_name)
+## from character to numeric (year)
+by_county_2$year <- as.numeric(format(by_county_2$year),  "%Y")
+
+by_county_2 %>%  head
+
+```
+USDA NASS provides county level cattle inventory data for 36 states. Other states' data are not published due to confidentiality and other policy issues. For instance county level data for Washington is available only till 2004 and no data for states as Arizona, Nevada etc. This might be one of the limitations of this analysis. 
+
+```{r }
+# summary table
+tapply(by_county_2$Inventory, by_county_2$county,
+  function(x) format(summary(x))) %>%  head
+
+tapply(by_county_2$Inventory, by_county_2$county,
+  function(x) format(summary(x))) %>%  tail
+```
+
+I could not come us with better summary table. Summary table above is represented for all counties and only head and tail parts are illustrated. What we can observe overall is that for many counties, the span of inventory for counties (range) varies a lot for the last 20 years which might be affected by many factors along with climate conditions and particularly drought. 
+
+## Combinig 2 datasets (county-level and drought data)
+
+As we mentioned, drought data is provided weekly and it measures the percent area of a certain county exposed to certain drought intensity. In order to see the relative magnitude of these numbers under each intensity level, we could find the mean values for each county (by corresponding fips number) per year and merge 2 data sets by county and year. 
+
+```{r }
+
+# summing drought data yearly by county
+drought_yearly_county <- aggregate(cbind(None, D0, D1, D2, D3, D4) ~ year + fips, data_1, FUN = mean) 
+
+# combining drought and inventory at county level
+combined_county <- left_join(drought_yearly_county, by_county_2, by = c('fips', 'year')) %>%  
+  dplyr:: select(., year, state_abbr, county, fips, None, D0, D1, D2, D3, D4, Inventory) %>%  
+  mutate(., t = as.integer(factor(year), levels = 2000:2021), t2 = t^2)  
+
+combined_county %>%  head()
+```
+
+The example county was illustrated to see inventory through years and no drought (None) indicator. What we can observe is that before 2010, there was a drought in this county which might have affected the inventory. However, the inventory did not alter much during the 2010s drought which might indicate risk-mitigation effects or other factors so that county was ready for next drought (or not). It can also depend on the level of drought - severe drought affects this particular county more. More the number under None level, less territory is exposed to drought. Hence one might expect positive correlation between them (and calculation indeed illustrates this hypothesis). On the other hand, one might expect negative correlation between inventory and D4 (severe drought). Hence, our hypothesis would be that drought negatively affects cattle inventory. 
+
+```{r}
+# example county
+example <- combined_county %>% 
+  filter(., fips == 1001) %>%  na.omit()
+
+g_1 <- ggplot(data = example) +
+  geom_line(aes(x = year, y = Inventory)) + ggtitle("Inventory") 
+g_2 <- ggplot(data = example) +
+  geom_line(aes(x = year, y = None)) + ggtitle("None") 
+g_3 <- ggplot(data = example) +
+  geom_line(aes(x = year, y = D4)) + ggtitle("D4")
+
+#inventory vs None
+g_1 / g_2 
+cor(example$None, example$Inventory)
+
+#inventory vs D4
+g_1 / g_3
+cor(example$None, example$D4)
+
+```
+
+
+# Econometric methods
+
+<!-- # The process and thought history of how you end up with the final econometric models and methods. -->
+<!-- Justify and explain everything you did in the paper!! -->
+<!-- I tested the joint statistical significance of these interactions terms because ... -->
+<!-- Re-emphasized: I do not care about your results. What I care is the process !! -->
+## Data generating process
+
+### Initial model 
+
+<span style='color:blue'> What variables are involved in explaining the dependent variable? </span>
+ 
+The primary aim is to determine the impacts of drought on cattle inventory. As it was mentioned above, for this purpose we will consider drought exposure by county area under 5 drought intensities and drought inventory by county. Hence, variables involved in explaining the dependent variable $Inventory$ for this analysis are: $D0$, $D1$, $D2$, $D3$, and $D4$. Because beef cow inventory data is typically recorded as of January 1 each year, this analysis will utilize cattle inventory data lead by 1 year (or equivalently we could use the lagged drought variables by 1 year) that are more appropriate with the recorded drought data (or inventory data). 
+
+However, what other factors may affect the cattle inventory? Firstly, high calf cow prices may affect the inventory negatively as well as high feed stuff prices (for instance hay prices). Afterwards, high feeder cattle prices may affect inventory positively as it is an incentive to grow the herd. Also, higher heifer number for beef cow replacement at time t-1 can positively affect the cattle inventory. Breeding season weather (temperature and precipitation) can also affect the cattle inventory. This analysis will consider yearly average area exposed to drought and do not consider seasonal impacts. These factors will be in the error term if we consider our simplest model. 
+
+The initial regression model is as follows: 
+
+$$
+\begin{align}
+  Inventory = & \beta_0 + \beta_1 D0 + \beta_2 D1 + \beta_3 D2 \ + \beta_4 D3 + \beta_5 D4 + u
+\end{align}
+$$
+```{r}
+
+uni_reg_1 <- feols((Inventory) ~ D0 + D1 + D2 + D3 + D4, data = combined_county)
+
+msummary(
+  uni_reg_1,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+```
+
+Estimated model:
+
+$$
+\hat{Inventory} = \ 10741.187 + \ 17.816 D0 + \ 63.882 D1 + \ 96.964 D2 \ + \ 27.466 D3 + \ 57.472 D4
+$$
+The coefficients indicate that when the area is exposed to drought, cattle inventory increases which totally contradicts our hypothesis. Hence, we should test and try to determine the reasons why we have these results (multicollinearity, endogeneity, heteroskedasticity, and others) as we have to identify are other factors in error term correlated with our variables, and come up with more appropriate model.     
+
+
+<span style='color:blue'> How are variables related with each other?
+   - Multicollinearity? </span>
+
+Multicollinearity is a phenomenon where two or more variables are highly correlated (negatively or positively) with each other. One of the problems while having multicollinearity is that very small changes in the input data can cause huge changes in the results, including reversal of sign of coefficients, change in significance and so on. Also, it can affect the standard error estimation. Correlation matrix below shows that there is a correlation between independent variables. cor(D2, D3) is the highest one (0.46) while cor(D1, D4) is the lowest (-0.0016) in terms of magnitude. Hence I think that we can conclude that our dependent variables are not correlated much even though we see some kind of correlation. 
+
+```{r}
+combined_county_1 <- combined_county  %>% 
+  select(., D0, D1, D2, D3, D4) %>% 
+  na.omit()
+
+round(cor(combined_county_1[sapply(combined_county_1, is.numeric)]), digits = 3)
+```
+
+<span style='color:blue'> What would be the appropriate functional form? </span>
+
+<!-- <span style='color:blue'>   -->
+<!-- - Non-linear impact (e.g., quadratic, log)?  -->
+<!-- - Interactions terms? -->
+<!-- - Structural difference? -->
+<!-- </span> -->
+
+As we know the transformation of variables is allowed without disturbing our analytical framework as long as the model is linear in parameter. In our model, it is unlikely that drought can affect the cattle inventory linearly. We can use the log-linear model to see the percent change in inventory given an additional percent area exposed to drought. The potential consequence of functional form misspecification can be omitted variable bias. 
+
+
+I could not come up with possible interaction terms for this model. However if we would add seasonal dummies to this model, we could have added interaction terms of drought data with seasonal dummies. This could show us that whether the impact of drought on inventory depends on season.
+
+## Endogeneity and Econometric Methods
+
+### Endogeneity problems
+
+<span style='color:blue'> Extensive discussions on why you may have endogeneity problems. What are the sources? </span>
+
+We have endogeneity issue when the error term is correlated with any of the independent variables. Our model contains certain information in its error term which might be correlated with our independent variables. Error term may contain:
+
+- calf cow prices; 
+- feed stuff prices; 
+- feeder cattle prices; 
+- heifer numbers for beef cow replacement at time t-1;
+- county population density;
+- breeding season weather (temperature and precipitation) and etc. 
+
+<span style='color:blue'> Omitted variable? </span>
+
+Omitted variable bias includes the bias caused by not including (omitting) important variables in the model. Temperature and precipitation per county in our model is kept in the error term. Several research works were able to determine that based on the biological cycle of cow-calf production and feed availability, seasonal temperature and precipitation levels do have certain impact on cattle inventory. On the other hand we know that temperature and precipitation is related to drought indicators. Leaving these terms in error term may cause upward/downward biases depending on the sign of correlation and the sign of $\beta_{temp}$ and $\beta_{precip}$.
+
+Moreover, feed stuff prices can also be correlated with our independent variables. Decreased pasture availability due to environmentally dry conditions may cause increase in feed prices, which eventually will force to decrease the herd size. By keeping this variable in our error term we may cause downward bias.    
+
+The drought conditions decrease pasture availability and can force producers to cull cows and limit heifer retention, which reduce calf crop in particular year. Each year’s calf crop accounts for a large share of the next year’s supply of feeder calves placed in feedlots and, subsequently, of fed cattle—or feeder calves marketed for slaughter from feedlots. Hence, calf cow prices/number can also be correlated with our independent variables and have explanatory power on the dependent variable. 
+
+Hence, what we can see is that we have left a lot of variables in our error term and our model may show biased estimates. Initial idea that we can look at the effects of drought by just looking at drought intensities and inventory might be misleading as we have a lot information left in our error term. Due to my limited knowledge in this field, I may have created this model which can lead to biased estimates and misleading interpretations.   
+
+<span style='color:blue'> Selection bias? </span>
+
+Section bias is a form of omitted variable bias, where we can have a common factor that affects both independent variables and dependent variable. In our model, we can have this bias type as we have temperature and precipitation affecting both of them. Hence, not including these variables in the model creates bias as well.
+
+<span style='color:blue'> Reverse causality? </span>
+
+This is a type of endogeneity problem where the independent variable of interest is causally affected by the dependent variable. In our model, I dont think that we have this type of bias as inventory can not affect the drought level. 
+
+<span style='color:blue'> Measurement errors? </span>
+
+Measurement error is an inaccuracy in the values observed as opposed to the actual values.  These discrepancies can make the error term larger and bring more “noise” into the model. In our case, we took the mean areas for each county per year under each drought intensity level which could give us the relative magnitudes. More sophisticated approach (averaging by season or so on) could have given more comprehensive and descriptive analysis. Nevertheless, as long as the measurement error is uncorrelated with the independent variables, OLS estimates will still be unbiased.
+
+### Methods to deal with the endogeneity problem
+
+<!-- Hypothetical discussion of what econometric methods you can use to deal with the endogeneity problem -->
+
+<!-- <span style='color:blue'> Randomization of the variable of interest? </span> -->
+
+<span style='color:blue'> Panel data approach? </span>
+
+First thing that we can do is to include fixed effects to control for the time-invariant variable peculiar to each county. As we know that including dummy variables of a categorical variable (like county), eliminates the variations between the elements of the category (e.g., different counties), and use only the variations within each of the element of the category. Time-invariant factors such as soil quality may vary across counties. Hence, we will add $fips$ fixed effect (FE). 
+
+Moreover, we know that year FEs capture anything that happened to all the individuals for a specific year relative to the base year. In other words, with year FEs, all the unobserved factors that are common to all the individuals in a specific year is controlled for (taken out of the error term). Hence, we will add $year$ FEs. The following model is a newly estimated model:
+
+
+```{r}
+uni_reg_2 <- feols(log(Inventory) ~ D0 + D1 + D2 + D3 + D4  | fips + year, data = combined_county)
+uni_reg_2 
+
+```
+
+
+What we notice from the results above is that when we utilized log-linear model and added fixed effects ($fips$ and $year$), signs of coefficients for D0 and D1 changed and only D2 has become significant at 10% level. Possible reasons: previous model was looking at variations between counties (not within one county) and unobserved factors in a year was not controlled for. Hence the impacts were overestimated. 
+
+In order to examine alternative functional forms, let's add the quadratic forms of all variables. 
+
+```{r}
+uni_reg_2_1 <- feols(log(Inventory) ~ D0 + I(D0^2) + D1 + I(D1^2) + D2 + I(D2^2) + D3 + I(D3^2) + D4 + I(D4^2)  | fips + year, data = combined_county)
+uni_reg_2_1
+
+linearHypothesis(uni_reg_2_1, c('I(D0^2)=0','I(D1^2)=0','I(D2^2)=0','I(D3^2)=0','I(D4^2)=0'))
+
+```
+
+We can see that the standard errors have become larger. D2 is still statistically along with I(D1^2) and I(D2^2). Also the joint test of quadratic forms indicate their joint significance at 5% level. Hence, the model with quadratic forms will be used for this analysis. 
+
+<span style='color:blue'> Instrumental variable approach? </span>
+
+Basic idea is that we bring in variable(s) (instrumental variable(s)) that does not belong to the model, but is related with the endogenous variable. Using the instrumental variable(s), we  make the endogenous variable exogenous, which will become an instrumented variable(s). Then by using the variation in the instrumented variable instead of the original endogenous variable, we estimate the impact of the original variable on dependent variable. For this analysis, I could not come up with such variable that will not affect inventory directly and is correlated with our variables and also not correlated with any of unobserved variables in the error term. Hence, I think we can not use this method to deal with our endogeneity problem. 
+
+(For this I think I need more knowledge on how drought data was collected.)   
+
+
+<span style='color:blue'> Difference in difference?</span>
+
+DID is typically used to estimate the effect of a specific intervention or treatment by comparing the changes in outcomes over time between a population/group that is enrolled in an intervention (the treatment group) and a population/group that is not (the control group). I could not see that we can use this method to deal with our endogeneity problem as to use DID we need a specific intervention or treatment which does not suit the aim of our analysis. 
+
+Hence, we can use fixed effects to somehow lower the endogeneity problem. But most importantly, we need to take important variables out of the error term and add to the main model. This will help us to control for many variables and somehow deal with endogeneity problem. For this we need more county-level data from various sources. In this analysis, I wanted to see can we use just drought data to see its impact on inventory which was a bad idea from very beginning. 
+
+
+<!-- Detailed descriptions of what you end up doing (explain the process) -->
+<!-- - Why do you think your approach address the endogeneity problem you identified above or not? ( It is not at all a problem that you cannot solve the endogeneity problem entirely ) -->
+
+## Standard error estimation approach (heterogeneity, clustered error, etc) 
+
+When the variance of the error term u differs depending on the value of x, the error is called to be heteroskedastic. Heteroskedasticity does not cause OLS estimators to be biased, but it can affect the estimate of variance in OLS estimator. As a result, hypothesis testing is going to be biased so one can over-reject/under-reject the hypothesis than he/she intends to. Let's examine the heteroskedasticity-robust standard error.
+
+```{r}
+
+uni_reg_3 <- feols(log(Inventory) ~ D0 + I(D0^2) + D1 + I(D1^2) + D2 + I(D2^2) + D3 + I(D3^2) + D4 + I(D4^2)  | fips + year, vcov = "hetero", data = combined_county)
+
+non_robust <- se(uni_reg_2_1) # non-robust
+# se(uni_reg_2, vcov = "hetero") == se(uni_reg_3)
+h_robust <- se(uni_reg_3) # h-robust
+
+data.frame(non_robust, h_robust) 
+
+```
+
+What we notice is that the standard errors are smaller (except for I(D1^2) in the estimation with heteroskedasticity-robust estimation compared to non-robust estimation. In fact, robust errors can be both smaller or bigger than the non-robust ones. What we see is that the error differences are not that large.  Hence, I think we can conclude that we have heteroskedastic error here, but we could perform other additional tests to see if we have heteroskedastic error or not. 
+
+Afterwards, clustered error can severely bias test results. It tends to make the impact of explanatory variables more/less significant than they truly are because of greatly underestimated/overestimated variance of the OLS estimator. In our model, because of some unobserved (omitted) county characteristics, error terms of same counties might be correlated. Let's examine the cluster-robust standard error estimation (by $fips$). 
+
+
+```{r}
+
+uni_reg_4 <- feols(log(Inventory) ~ D0 + I(D0^2) + D1 + I(D1^2) + D2 + I(D2^2) + D3 + I(D3^2) + D4 + I(D4^2)  | fips + year, cluster = ~ fips, data = combined_county)
+
+non_robust <- se(uni_reg_2_1) # non-robust
+
+# se(uni_reg_2, vcov = "hetero") == se(uni_reg_3)
+h_robust <- se(uni_reg_3) # h-robust
+
+# se(uni_reg_2, cluster = ~ fips) == se(uni_reg_4) 
+clustered_f <- se(uni_reg_4) # clustered (fips)
+
+data.frame(non_robust, h_robust, clustered_f) 
+
+```
+
+What we notice is that results for non-robust estimation and cluster-robust standard error estimation show the same results. Hence, clustering only by $fips$ might not be a good idea. Let's examine further the cluster-robust standard error estimation (by $year$).  
+
+```{r}
+
+uni_reg_5 <- feols(log(Inventory) ~ D0 + I(D0^2) + D1 + I(D1^2) + D2 + I(D2^2) + D3 + I(D3^2) + D4 + I(D4^2)   | fips + year, cluster = ~ year, data = combined_county)
+
+non_robust <- se(uni_reg_2_1) # non-robust
+
+# se(uni_reg_2, vcov = "hetero") == se(uni_reg_3)
+h_robust <- se(uni_reg_3) # h-robust
+
+# se(uni_reg_2, cluster = ~ fips) == se(uni_reg_4) 
+clustered_f <- se(uni_reg_4) # clustered (fips)
+
+# se(uni_reg_2, cluster = ~ year) == se(uni_reg_5) 
+clustered_y <- se(uni_reg_5) # clustered (year)
+
+data.frame(non_robust, h_robust, clustered_f, clustered_y) 
+
+```
+What we see is that the cluster-robust standard error estimation (by $year$) illustrate the higher standard errors. How about the cluster-robust standard error estimation (by $year$ and $fips$). 
+
+```{r}
+
+uni_reg_6 <- feols(log(Inventory) ~ D0 + I(D0^2) + D1 + I(D1^2) + D2 + I(D2^2) + D3 + I(D3^2) + D4 + I(D4^2)   | fips + year, cluster = ~ year + fips, data = combined_county)
+
+non_robust <- se(uni_reg_2_1) # non-robust
+
+# se(uni_reg_2, vcov = "hetero") == se(uni_reg_3)
+h_robust <- se(uni_reg_3) # h-robust
+
+# se(uni_reg_2, cluster = ~ fips) == se(uni_reg_4) 
+clustered_f <- se(uni_reg_4) # clustered (fips)
+
+# se(uni_reg_2, cluster = ~ year) == se(uni_reg_5) 
+clustered_y <- se(uni_reg_5) # clustered (year)
+
+# se(uni_reg_2, cluster = ~ year + fips) == se(uni_reg_6) 
+clustered_y_f <- se(uni_reg_6) # clustered (year and fips)
+
+data.frame(non_robust, h_robust, clustered_f, clustered_y, clustered_y_f) 
+
+```
+Here, one might arise a question regarding the difference between clustered-robust standard error calculation and fixed effects. As I have understood, the cluster robust standard error calculation corrects the standard errors for heteroscedasticity and serial correlation. While the fixed effects model estimates the within-group effects of the variables. For our model, we should include $fips$ and $year$ fixed effects as we are interested in within-county and year effects of the variables (to account for unobserved factors). Also, we should include clustered error estimations by $fips$ and $year$ to account for heteroskedasticity and serial correlation across “clusters” of observations (county, year). Hence, we have the following model results.
+
+```{r}
+uni_reg_6 %>%  tidy 
+```
+
+What we see is that with the cluster-robust standard error estimation (by $fips$ and $year$), D2 and I(D1^2) have become significant (I(D2^2 became insignificant) and errors changed significantly. This indicates that clustered error terms intended to make the impact of explanatory variables more significant than they truly are.   
+
+## Testing
+
+Even though the most variables are insignificant separately, we can check if they are significant jointly by using the F-test. 
+
+```{r}
+F_test_all <- linearHypothesis(uni_reg_6, c("D0=0", "D1=0", "D2=0", "D3=0", "D4=0"))
+F_test_all
+
+```
+
+F-test shows that they are significant jointly. 
+
+# Results and conclusion
+
+Our aim was to determine the drought effects on cattle production (inventory) by looking at drought monitor data that shows the percentage area exposed to particular drought intensities by counties. We started with the simple model:
+
+$$
+\begin{align}
+  Inventory = & \beta_0 + \beta_1 D0 + \beta_2 D1 + \beta_3 D2 \ + \beta_4 D3 + \beta_5 D4 + u
+\end{align}
+$$
+After examining the nature of relationships between independent and dependent variables, adding fixed effects and cluster-robust standard error estimation (by $fips$ and $year$), we come up with the following model:  
+
+
+$$
+\begin{align}
+  log(Inventory) = & \beta_0 + \beta_1 D0 + \beta_2{D0^2} + \beta_3 D1 + \beta_4{D1^2} + \beta_5 D2 + \beta_6{D2^2} + \beta_7 D3 + \beta_8{D3^2} + \beta_9 D4 + \beta_{10}{D4^2}  + \beta_{11} |fips| + \beta_{12} |year| + u
+\end{align}
+$$
+Results indicate that drought can have non-linear impacts on cattle inventory. However, analysis showed that the error term contains a lot of information correlated with independent variables and have explanatory power beyond the observed variables. Estimated regression results are biased and insignificant for most variables. Testing their joint significance with F-test showed that they are significance jointly. Hence, in order to deal with endogeneity problem, we need to control for other variables kept in the error term. This analysis showed that it is very crucial to understand and be knowledgeable in the field of interest to be able to create proper model.
+
+
