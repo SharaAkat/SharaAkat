@@ -1,0 +1,720 @@
+---
+title: "Assignment 3"
+author: "Shara Akat"
+output:
+  html_document:
+    number_sections: yes
+    theme: flatly
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    highlight: zenburn
+    number_sections: yes
+    toc: yes
+  word_document: default
+geometry: margin=0.75in
+---
+
+
+# Instruction
+
+The following problems are from Chapters 6, 7, and 8 of the Wooldridge book (Introductory Econometrics, 5th Edition). All the problems are typed out on this Rmd (and in html) file. So, it is not necessary to look at the book for the corresponding problems. Indeed, you should not look at the book because problems here are slightly modified versions of those from the book. You still need the book because some problems refer to equations in the book. All the data sets for the problems have been uploaded on the blackboard. 
+
+Due date is <span style='color:blue'>April 8 (Friday)</span> <span style='color:red'>before</span> the lab session, in which this assignment is reviewed by the TAs. Submission after the deadline would result in a heavy discount on the score.
+
+Please submit your assignment using the following [Dropbox submission request link](https://www.dropbox.com/request/hWDplzmHp5KiDhmo0raF). Name your Rmd file using the following convention: `lastname_assignment_3.Rmd`. For example, it would be `Mieno_assignment_3.Rmd` for me.
+
+I do not accept any hand-written answers (you will get score of zero for that problem). You are encouraged to use the "knitr" functionality of RStudio, but not required. Leave all the R codes and results in your answer (where appropriate) for the computer exercises. If your R codes are not provided, you will get score of 0 for that question.
+
+You are encouraged to discuss the problems with your classmates. However, I would recommend that you do so after you try all the problems yourself. You would be simply doing disservice to yourself if you resort to your friends' help immediately, depriving you of important opportunities to think carefully about what we have learned and understand them through solving the problems.
+
+<!-- <span style="background:yellow">(you may remove this part when you submit your work)</span>  -->
+<!-- Instruciton ends here -->
+
+------
+
+
+
+<!-- Non-computer Exercises -->
+
+# Non-computer Exercises
+
+------
+
+## Problem 3 (Chapter 7)
+
+Using the data in GPA2.RAW, the following equation was estimated:
+
+$$
+\begin{align}
+sat = & \beta_0 + \beta_1 hsize + \beta_2 hsize^2 +\beta_3 female \\ & +  \beta_4 black + \beta_5 female \times black
+\end{align}
+$$
+
+The table below presents the regression results.
+
+
+
+```{r}
+library(dplyr)
+library(fixest)
+library(modelsummary)
+library(data.table)
+library(readstata13)
+gpa_data <- read.dta13("C:/Users/shara/Downloads/gpa2.dta") %>%
+  data.table() %>%
+  .[, hsize_2 := hsize^2] %>%
+  .[, female_black := female * black]
+
+reg_gpa <- feols(sat ~ hsize + hsize_2 + female + black + female_black, data = gpa_data)
+
+msummary(
+  reg_gpa,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+```
+
+<br>
+
+Note that the standard errors of coefficients estimators are reported in parentheses.
+
+The variable $sat$ is the combined SAT score, $hsize$ is size of the student's high school graduating class, in hundreds, $female$ is a gender dummy variable, $black$ is a race dummy
+variable equal to one for blacks and zero otherwise, and $female\_black$ is the interaction term between $female$ and $black$.
+
+------
+
+(i) Is there strong evidence that $hsize^2$ should be included in the model? From this equation, what is the optimal high school size?
+
+<span style='color:blue'>Answer:</span>
+
+- We can see $hsize^2$ is statistically significant (0.1%). So we can include this variable; 
+- If we will differentiate both sides wrt $hsize$, we get the following equation:
+
+$$
+\begin{align}
+\frac{\partial sat}{\partial hsize} = &\beta_1 + \beta_2 * 2 *hsize = 19.297 - 2.195 * 2 * hsize = 19.297 - 4.39 hsize 
+\end{align}
+$$
+This shows that when $hsize$ increases by 1 (in hundreds), $sat$ increases by (19.297 - 4.39 $hsize$). Optimal size is the size from which none wants to deviate. We need a point where change in $sat$ wrt change in $hsize$ will equal 0. Meaning we need:
+
+$$
+\begin{align}
+\frac{\partial sat}{\partial hsize} =  19.297 - 4.39 hsize = 0
+\end{align}
+$$
+The above equation gives $hsize$ = 4.3957 (=439 students).
+
+------
+
+(ii) Holding $hsize$ fixed, what is the estimated difference in SAT score between nonblack females and nonblack males? How statistically significant is this estimated difference?
+
+<span style='color:blue'>Answer:</span>
+
+$female$ is a gender dummy variable (baseline == male);
+$black$ is a race dummy variable equal to one for blacks and zero otherwise (baseline == nonblack);
+$female\_black$ is the interaction term between $female$ and $black$.
+
+To answer this question, we can look at $\beta_3$ (= -45.091). This number shows the score difference between white females compared to the baseline of white males if they have same $hsize$ (it seems like white females' scores are lower compared to white males' scores on average). And it is statistically significant.  
+
+------
+
+(iii) What is the estimated difference in SAT score between nonblack males and black males? Test the null hypothesis that there is no difference between their scores, against the alternative that there is a difference.
+
+<span style='color:blue'>Answer:</span>
+
+To answer this question, we can look at $\beta_4$ (= -169.813). $\beta_4$ (-169.813) shows the score difference between black males compared to white males. It seems like black males get less scores compared white males. And it is statistically significant (so there is a difference according to the model). 
+
+------
+
+(iv) What is the estimated difference in SAT score between black females and nonblack females? What would you need to do to test whether the difference is statistically significant?
+
+<span style='color:blue'>Answer:</span>
+
+To answer this question, we can look at $\beta_4$ (= -169.813) and $\beta_5$ (= 62.306). $\beta_3$, $\beta_4$ and $\beta_5$ show the impact of black female, while $\beta_3$ shows the impact of nonblack female. The score difference between them gives us$\beta_4$ (= -169.813) and $\beta_5$ (= 62.306). So according to results, black females get lower score compared to nonblack females (-107.507). 
+
+Here we would be testing the joint significance of the coefficients. We need to do an F-test. 
+
+------
+
+## Problem 6 (Chapter 7)
+
+To test the effectiveness of a job training program on the subsequent wages of workers, we specify the model
+
+$$
+\begin{align}
+    \log(wage) = \beta_0 + \beta_1 train + \beta_2 educ + \beta_3 exper + u
+\end{align}
+$$
+
+where $train$ is a binary variable equal to unity if a worker participated in the program. Think of the error term $u$ as containing unobserved worker ability. If less able workers have a greater chance of being selected for the program, and you use an OLS analysis, what can you say about the likely bias in the OLS estimator of $\beta_1$?
+
+<span style='color:blue'>Answer:</span>
+
+$\beta_1$ - $train$
+
+So if less able workers have a greater chance of being selected for the program, their chances of getting trained is high (less ability - high chance for training). So they are negatively correlated. Also ability and wage are correlated, so $\beta_{ability}$ is not zero and they are to the most extend positively correlated (ability has some explanatory power on wage beyond the variables). Hence, we would have Omitted variable bias (case 4) and bias < 0. 
+
+------
+
+
+<!-- Computer Exercises -->
+
+# Computer Exercises
+
+## Problem C1 (Chapter 6)
+
+Use the data in **KIELMC.dta**, only for the year 1981, to answer the following questions. The data are for houses that sold during 1981 in North Andover, Massachusetts; 1981 was the year construction began on a local garbage incinerator.
+
+------
+
+(i) To study the effects of the incinerator location on housing price, consider the simple regression model
+$$
+\log(price) = \beta_0 + \beta_1 log(dist) + u
+$$
+
+where $price$ is housing price in dollars and $dist$ is distance from the house to the incinerator measured in feet. Interpreting this equation causally, what sign do you expect for $\beta_1$ if the presence of the incinerator depresses housing prices? Estimate this equation and interpret the results.
+
+<span style='color:blue'>Answer:</span>
+
+Expectations: $\beta_1$ would probably be positive. 
+Reason: as we get farther from the incinerator, the prices should get higher as well.
+
+
+```{r}
+
+kielmc_data <- read.dta13("C:/Users/shara/Downloads/KIELMC.dta") %>% 
+  filter(., year == 1981)
+
+uni_reg <- feols(log(price) ~ log(dist), data = kielmc_data)
+
+msummary(
+  uni_reg,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+```
+
+Estimated model:
+
+$$
+\hat{log(price)} = \ 8.047 + \ 0.365 log(dist)
+$$
+For log-log functional form, a percentage change in x would result in a β1 percentage change in y.
+A percentage change increase in $dist$ would result in 0.365 percentage change increase in $price$.
+
+<br>
+
+------
+
+(ii) To the simple regression model in part (i), add the variables log($intst$), log($area$), log($land$), $rooms$, $baths$, and $age$, where $intst$ is distance from the home to the interstate, $area$ is square footage of the house, $land$ is the lot size in square feet, $rooms$ is total number of rooms, $baths$ is number of bathrooms, and $age$ is age of the house in years. Now, what do you conclude about the effects of the incinerator? Explain why (i) and (ii) give conflicting results.
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+uni_reg_2 <- feols(log(price) ~ log(dist) + log(intst) + log(area) + log(land) + rooms + baths + age, data = kielmc_data)
+
+msummary(
+  uni_reg_2,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+```
+
+
+
+Estimated model:
+
+$$
+\hat{log(price)} = \ 7.592 + \ 0.055 log(dist) - \ 0.039 log(intst) + \ 0.319 log(area) + \ 0.077 log(land) + \ 0.043 rooms + \ 0.167 baths - 0.004 age
+$$
+As we can see, the values of $\beta_1$ are different in 2 models (simple == 0.365 and statistically significant; multivariate == 0.055 and not significant). It seems like in first model, $dist$ was capturing the effects of other variables hidden in the error term (that do affect the price and are correlated) and showing the overestimation of ($\beta_1$) its effects on $price$. 
+
+------
+
+(iii) Add $[log(intst)]^2$ to the model from part (ii). Now what happens? What do you conclude about the importance of functional form?
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+uni_reg_3 <- feols(log(price) ~ log(dist) + log(intst) + I(log(intst)^2) + log(area) + log(land) + rooms + baths + age, data = kielmc_data)
+
+msummary(
+  uni_reg_3,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+```
+
+Estimated model:
+
+$$
+\hat{log(price)} = \ -3.318 + \ 0.185 log(dist) + \ 2.073 log(intst) - \ 0.119 {log(intst)^2} \ 0.359 log(area) + \ 0.091 log(land) + \ 0.038 rooms + \ 0.150 baths - 0.00. age
+$$
+
+As we can see, the value of $\beta_1$ in this model is different from other 2 models above (=0.185) and significant (at 1% level). We added $[log(intst)]^2$ functional form to the model that captures the non-linear marginal impact of $intst$ to $price$ so that the marginal impact of $intst$ vary depending on the value of $intst$. It seems like adding this functional form captures the relationships better than in other models.
+
+------
+
+(iv) Is the square of log($dist$) significant when you add it to the model from part (iii)?
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+uni_reg_4 <- feols(log(price) ~ log(dist) + I(log(dist)^2) + log(intst) + I(log(intst)^2) + log(area) + log(land) + rooms + baths + age, data = kielmc_data)
+
+msummary(
+  uni_reg_4,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+```
+
+
+The results indicate that when we add the square of log($dist$), both log($dist$) and its square have become  statistically insignificant. Why? It might be because the impact of $dist$ on $price$ is linear and linear model captures its effect better. 
+
+------
+
+## Problem C3 (Chapter 6)
+
+Consider a model where the return to education depends upon the amount of work experience (and vice versa):
+
+$$
+\begin{align}
+ \log(wage) = \beta_0 + \beta_1 educ + \beta_2 exper + \beta_3 educ\times exper + u
+\end{align}
+$$
+
+------
+
+
+(i) Show that the return to another year of education (in decimal form), holding $exper$ fixed, is $\beta_1 + \beta_3 exper$.
+
+<span style='color:blue'>Answer:</span>
+
+To answer this question, lets find the derivative of the equation above wrt education.
+
+$$
+\begin{align}
+\frac{\partial log(wage)}{\partial educ} = &\beta_1 + \beta_3 *exper 
+\end{align}
+$$
+
+------
+
+(ii) State the null hypothesis that the return to education does not depend on the level of $exper$. What do you think is the appropriate alternative?
+
+$H_0:\;\; \beta_3=0$
+
+<span style='color:blue'>Answer:</span>
+
+The appropriate alternative can be that the return to education does depend on the level of $exper$.
+
+$H_1:\;\; \beta_3 \ne 0$
+
+------
+
+(iii) Use the data in **WAGE2.dta** to test the null hypothesis in (ii) against your stated alternative.
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+wage2_data <- read.dta13("C:/Users/shara/Downloads/WAGE2.dta") 
+
+uni_reg_5 <- feols(log(wage) ~ educ + exper + I(educ * exper), data = wage2_data)
+uni_reg_5
+```
+
+From the above results, we may see that we can reject the null hypothesis at 5% level (0.036477). So that the return to education does depend on the level of $exper$. 
+
+
+
+(iv) Let $\theta_1$ denote the return to education (in decimal form), when $exper=10$: $\theta_1=\beta_1+10\beta_3$. Obtain $\hat{\theta}_1$. Test if $\theta_1$ statistically significantly different from 0.
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+library(car)
+
+theta_1 <- 0.044050 + 10 * 0.003203
+theta_1
+
+linearHypothesis(uni_reg_5, "educ + 10*I(educ * exper)=0")
+```
+Given $exper=10$, $\theta_1=\beta_1+10\beta_3$. $\theta_1$ = 0.07608.
+Test shows that $\theta_1$ is statistically different from 0.
+
+
+
+## Problem C2 (Chapter 7)
+
+Use the data in **WAGE2.dta** for this exercise.
+
+(i) Estimate the model
+$$
+\begin{align}
+  log(wage) = & \beta_0 + \beta_1 educ + \beta_2 exper + \beta_3 tenure \\
+  & + \beta_4 married + \beta_5 black + \beta_6 south + \beta_7 urban + u
+\end{align}
+$$
+and report the results in the usual form. Holding other factors fixed, what is the approximate difference in monthly salary between blacks and nonblacks? Is this difference statistically significant?
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+uni_reg_6 <- feols(log(wage) ~ educ + exper + tenure + married + black + south + urban, data = wage2_data)
+
+wage2_data %>%  head
+msummary(
+  uni_reg_6,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+```
+
+$black$ is a dummy variable with 0 == white and 1 == black (baseline == white).
+
+So, we should look at $\beta_5$ (= -0.188): the monthly salary of blacks relative to nonblacks is 0.188% less on average. Yes, it is statistically significant at 0.1% level.
+
+<br>
+
+
+
+------
+
+(ii) Add the variables $exper^2$ and $tenure^2$ to the equation and show that they are jointly insignificant at the 20% level.
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+uni_reg_7 <- feols(log(wage) ~ educ + exper + I(exper^2) + tenure + I(tenure^2) + married + black + south + urban, data = wage2_data)
+
+linearHypothesis(uni_reg_7, c("I(exper^2)=0", "I(tenure^2)=0"))
+
+```
+
+As we can see, they are indeed jointly insignificant at 20% level (= 0.2254).
+
+<br>
+
+------
+
+(iii) Extend the original model to allow the return to education to depend on race and test whether the return to education does depend on race. Report the regression results.
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+uni_reg_8 <- feols(log(wage) ~ educ + exper + tenure + married + black + south + urban + I(educ * black), data = wage2_data)
+
+wage2_data %>%  head
+msummary(
+  uni_reg_8,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+
+```
+
+We can see that allowing the return to education to depend on race and testing its significance showed that the return to education does not depend on race in this model. 
+
+<br>
+
+------
+
+(iv) Again, start with the original model, but now allow wages to differ across four groups of people: married and black, married and nonblack, single and black, and single and nonblack. What is the estimated wage differential between married blacks and married nonblacks?
+
+<span style='color:blue'>Answer:</span>
+
+In order to estimate the impacts of these 4 categories separately, we need to add an interaction term. Lets control for married and black. The estimated wage differential between married blacks and married nonblacks can be found by looking at coefficients for:
+- married black: married, black, married and black;
+- married nonblack: married (as nonblack is our baseline). 
+
+Their diffidence is coefficients for variables black, and {married and black}. 
+
+```{r}
+
+uni_reg_9 <- feols(log(wage) ~ educ + exper + tenure + married + black + south + urban + married*black, data = wage2_data)
+
+summary(uni_reg_9)
+
+```
+
+
+If we control for married and black, we can find the difference between married black and married nonblack by looking at $black$ and $married_black$ (= -0.179). So that married black gets less for about 0.179% than married nonblack.
+
+<br>
+
+------
+
+
+## Problem C6 (Chapter 7)
+
+Use the data in **SLEEP75.dta** for this exercise. The equation of interest is
+
+$$
+\begin{align}
+sleep = & \beta_0 + \beta_1 totwrk + \beta_2 educ + \beta_3 age + \beta_4 age^2 \\
+  & + \beta_5 yngkid + u
+\end{align}
+$$
+
+(i) Estimate this equation separately for men and women and report the results in the usual form. Are there notable differences in the two estimated equations?
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+sleep75_data <- read.dta13("C:/Users/shara/Downloads/SLEEP75.dta")  
+
+sleep75_data_female <- sleep75_data %>%  filter(., male == 0)
+sleep75_data_male <- sleep75_data %>%  filter(., male == 1)
+  
+uni_reg_10_female <- feols(sleep ~ totwrk + educ + age + I(age^2) + yngkid, data = sleep75_data_female)
+
+uni_reg_10_male <- feols(sleep ~ totwrk + educ + age + I(age^2) + yngkid, data = sleep75_data_male)
+
+msummary(
+  list(uni_reg_10_female, uni_reg_10_male),
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+
+# Model 1 == female
+# Model 2 == male
+```
+
+As we can see there are differences in coefficients for males and females both in magnitudes and signs.
+
+
+(ii) Compute the Chow test for equality of the parameters in the sleep equation for men and women. Use the form of the test that adds $male$ and the interaction terms $male\times totwrk$, $\dots$, $male\times yngkid$ and uses the full set of observations. What are the relevant degrees of freedom for the test? Should you reject the null at the 5% level?
+
+<span style='color:blue'>Answer:</span>
+ 
+ /-/-/-/-/-/
+
+------
+
+(iii) Now, allow for a different intercept for males and females and determine whether the interaction terms involving male are jointly significant.
+
+<span style='color:blue'>Answer:</span>
+
+ /-/-/-/-/-/
+
+<br>
+
+
+------
+
+(iv) Given the results from parts (ii) and (iii), what would be your final model?
+
+
+<span style='color:blue'>Answer:</span>
+
+  /-/-/-/-/-/
+
+------
+
+## Problem C13 (Chapter 8)
+
+Use the data in **FERTIL2.dta** to answer this question.
+
+
+
+(i) Estimate the model
+$$
+\begin{align}
+children = & \beta_0 + \beta_1 age + \beta_2 age^2 + \beta_3 educ \\
+& + \beta_4 electric + \beta_5 urban + u
+\end{align}
+$$
+and report the usual and heteroskedasticity-robust standard errors. Are the robust standard errors always bigger than the non-robust ones?
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+fertil2_data <- read.dta13("C:/Users/shara/Downloads/FERTIL2.dta")  
+
+uni_reg_12 <- feols(children ~ age + I(age^2) + educ + electric + urban, data = fertil2_data)
+uni_reg_13 <- feols(children ~ age + I(age^2) + educ + electric + urban, data = fertil2_data, vcov = "hetero")
+
+msummary(
+  list(uni_reg_12, uni_reg_13),
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+
+
+uni_reg_12
+uni_reg_13
+
+```
+
+So the robust standard errors are not always bigger than the non-robust ones. For instance, for variables $electric$ and $urban$, the errors are bigger in non-robust one.
+
+
+<br>
+
+
+------
+
+(ii) Would you say the heteroskedasticity you found is practically important?
+
+<span style='color:blue'>Answer:</span>
+
+By observing the above information, I do not think that it is practically important as the values do not differ much that could affect the hypothesis test results (not much significant differences in results). 
+
+------
+
+
+## Problem C14 (Chapter 8)
+
+Use **beauty.dta** for this question. Here are the list of definitions of some variables that are not self-explanatory:
+
++ $looks$: score of how attractive observed individuals are in terms of appearance
++ $belavg$: 1 if $looks\leq 2$
++ $abvavg$: 1 if $looks\geq 4$
+
+For question (ii), you do not have to do heteroskedasticity-robust F-test.
+
+------
+
+(i) Using the data pooled for men and women, estimate the equation
+$$
+\begin{align}
+  lwage = & \beta_0 + \beta_1 belavg + \beta_2 abvavg + \beta_3 female \\
+  & + \beta_4 educ + \beta_5 exper + \beta_6 exper^2 + u
+\end{align}
+$$
+and report the results using heteroskedasticity-robust standard errors. Are any of the coefficients surprising in either their signs or magnitudes? Is the coefficient on female practically large and statistically significant?
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+beauty_data <- read.dta13("C:/Users/shara/Downloads/beauty.dta")  
+beauty_data %>%  head
+
+uni_reg_14 <- feols(lwage ~ belavg + abvavg + female + educ + exper + I(exper^2), data = beauty_data, vcov = "hetero")
+
+msummary(
+  uni_reg_14,
+  stars = TRUE,
+  gof_omit = "IC|Log|Adj|F|Pseudo|Within"
+)
+
+```
+
+I think the coefficients are worth attention: looking below average and above average negatively affect the wage (even though $abvavg$ is not statistically significant); females get lower wage than male (which is not that surprising); and $exper^2$ negatively affects wage. Coefficient on female is -0.453 and compared to males, I think it is large and it is also statistically significant (0.1% level). 
+
+<br>
+
+
+------
+
+(ii) Add interactions of female with all other explanatory variables in the equation from part (i) (five interactions in all). Compute the usual F test of joint significance of the five interactions and a heteroskedasticity-robust version. Does using the heteroskedasticity-robust version change the outcome in any important way?
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+library(car)
+beauty_data_v2 <- beauty_data %>% 
+  mutate(., female_belavg = female * belavg, female_abvavg = female * abvavg, 
+         female_educ = female * educ, female_exper = female * exper, female_exper_2 = female * exper*exper)
+
+uni_reg_15 <- feols(lwage ~ belavg + female_belavg + abvavg + female_abvavg + female + educ + female_educ 
+                    + exper + female_exper + I(exper^2) + female_exper_2, data = beauty_data_v2)
+uni_reg_15
+
+F_test_usual <- linearHypothesis(uni_reg_15, c("female_belavg=0", "female_abvavg=0", "female_educ=0",
+                                               "female_exper=0", "female_exper_2=0"))
+F_test_usual
+```
+F-test results show their joint significance at 0.1% level.
+
+Did not do the robust one: "For question (ii), you do not have to do heteroskedasticity-robust F-test".
+
+------
+
+(iii) In the full model with interactions, determine whether those involving the looks variables-$female\times belavg$ and $female\times abvavg$-are jointly significant. Are their coefficients practically small?
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+uni_reg_15
+
+F_test_for_2 <- linearHypothesis(uni_reg_15, c("female_belavg=0", "female_abvavg=0"))
+F_test_for_2
+```
+
+So it seems like they are not jointly significant. Coefficients are $female\times belavg$ = 0.043647, $female\times abvavg$ = 0.082405. They are not that big.
+
+<br>
+
+
+------
+
+# Data management
+
+In this problem, you are asked to reshape fake datasets (**corn_price_long.rds** and **corn_prod_wide.rds**) and merge them into a single dataset that is ready for statistical analysis. **corn_price_long.rds** has data on corn price by county and month for 2015. **corn_prod_wide.rds** has data on corn production by county (made-up) and month for 2015.
+
+------
+
+(i) **corn_prod_wide.rds** is in a wide format. Using the **gather()** function, convert **corn_prod_wide.rds** into a long format in which each row represents the production level for a specific county-year combination. 
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+library(tidyverse)
+corn_prod_wide <- readRDS("C:/Users/shara/Downloads/corn_prod_wide.rds") 
+# corn_prod_wide %>%head
+
+corn_prod_long <- corn_prod_wide %>% 
+  gather(., "month", "prod", -county_code)
+
+corn_prod_long %>%  head
+```
+
+------
+
+(ii) Now, it's time to merge them together. Would the single key $couty\_code$ be sufficient to merge them? Why or why not?
+
+<span style='color:blue'>Answer:</span>
+
+Single county code will not be sufficient. Because we have 12-month-data for a single county, hence we need to merge by county and month to avoid wrong data merging (so we will murge county data by months). 
+
+------
+
+(iii) Merge them. 
+
+<span style='color:blue'>Answer:</span>
+
+```{r}
+
+corn_price_long <- readRDS("C:/Users/shara/Downloads/corn_price_long.rds") 
+# corn_price_long %>%head
+
+corn_prod_long$month <- as.numeric(as.character(corn_prod_long$month))
+
+# way 1
+merged <- merge(corn_price_long, corn_prod_long, by.x = c("county_code", "month"), by.y = c("county_code", "month"))
+merged %>%  head
+
+#alternatively
+merged_v2 <- left_join(corn_prod_long, corn_price_long, by = c("county_code", "month")) %>% 
+  relocate(., county_code, month, price, prod)
+merged_v2 %>%  head
+
+merged %>%  nrow() == merged_v2 %>% nrow()
+
+```
+
+
+
