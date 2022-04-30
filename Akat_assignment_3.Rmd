@@ -16,23 +16,6 @@ geometry: margin=0.75in
 ---
 
 
-# Instruction
-
-The following problems are from Chapters 6, 7, and 8 of the Wooldridge book (Introductory Econometrics, 5th Edition). All the problems are typed out on this Rmd (and in html) file. So, it is not necessary to look at the book for the corresponding problems. Indeed, you should not look at the book because problems here are slightly modified versions of those from the book. You still need the book because some problems refer to equations in the book. All the data sets for the problems have been uploaded on the blackboard. 
-
-Due date is <span style='color:blue'>April 8 (Friday)</span> <span style='color:red'>before</span> the lab session, in which this assignment is reviewed by the TAs. Submission after the deadline would result in a heavy discount on the score.
-
-Please submit your assignment using the following [Dropbox submission request link](https://www.dropbox.com/request/hWDplzmHp5KiDhmo0raF). Name your Rmd file using the following convention: `lastname_assignment_3.Rmd`. For example, it would be `Mieno_assignment_3.Rmd` for me.
-
-I do not accept any hand-written answers (you will get score of zero for that problem). You are encouraged to use the "knitr" functionality of RStudio, but not required. Leave all the R codes and results in your answer (where appropriate) for the computer exercises. If your R codes are not provided, you will get score of 0 for that question.
-
-You are encouraged to discuss the problems with your classmates. However, I would recommend that you do so after you try all the problems yourself. You would be simply doing disservice to yourself if you resort to your friends' help immediately, depriving you of important opportunities to think carefully about what we have learned and understand them through solving the problems.
-
-<!-- <span style="background:yellow">(you may remove this part when you submit your work)</span>  -->
-<!-- Instruciton ends here -->
-
-------
-
 
 
 <!-- Non-computer Exercises -->
